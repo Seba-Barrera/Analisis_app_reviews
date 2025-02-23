@@ -1003,7 +1003,7 @@ with tab6:
   with st.expander('Grafico de dispersion de reglas', expanded=False):
     st.plotly_chart(fig6)
     
-  with st.expander('Grafo de reglas de asociacion', expanded=True):
+  # with st.expander('Grafo de reglas de asociacion', expanded=True):
     # st.components.v1.html(grafo_html, height=500, scrolling=True)
 
 
