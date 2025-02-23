@@ -402,13 +402,13 @@ def graficas_apriori2(
 
 
   df_reglas_apriori3['antecedente'] = df_reglas_apriori3['antecedente'].apply(
-    lambda x: '+'.join(x)
+    lambda x: '+'.join([x])
   )
   df_reglas_apriori3['consecuente'] = df_reglas_apriori3['consecuente'].apply(
-    lambda x: '+'.join(x)
+    lambda x: '+'.join([x])
   )
   df_reglas_apriori3['regla'] = df_reglas_apriori3.apply(
-    lambda x: x['antecedente']+' -> '+x['consecuente'],
+    lambda x: x['antecedente']+' → '+x['consecuente'],
     axis=1
   )
         
@@ -903,6 +903,9 @@ with tab6:
 
 # Video tutorial para deployar una app en streamlitcloud
 # https://www.youtube.com/watch?v=HKoOBiAaHGg&ab_channel=Streamlit
+
+
+
 
 
 
