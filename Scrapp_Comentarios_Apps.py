@@ -29,10 +29,6 @@ import networkx as nx
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm
 
-# libreria para analitica textual
-from mlxtend.frequent_patterns import apriori, association_rules
-
-
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -52,8 +48,16 @@ df_scrapp5 = pd.read_csv(
   sep=';',
   decimal=',',
   encoding='utf-8-sig'
-)
+  )
 
+
+# leer data
+df_scrapp5_REGLAS_APRIORI = pd.read_csv(
+  'df_scrapp5_REGLAS_APRIORI.csv',
+  sep=';',
+  decimal=',',
+  encoding='utf-8-sig'
+  )
 
 #=======================================================================
 # [B.1] Grafico de barra de nota promedio 
@@ -365,118 +369,22 @@ def graf_nube(
 
 
 
-
 #=======================================================================
-# [B.6] Tabla de reglas de asociacion usando apriori entre palabras
+# [B.6] Grafico + Grafo de reglas de asociacion 
 #=======================================================================
-
-
 
 @st.cache_resource() # https://docs.streamlit.io/library/advanced-features/caching
-def generar_df_apriori(
-  df_input,
-  filtro_App,
-  filtro_SO,
-  filtro_calificacion,
-  min_soporte = 0.005,
-  min_confianza = 0.05
-  ):
-  
-  # crear copia agregando id
-  df_apriori = df_input.copy()
-  df_apriori['id'] = range(1,1+len(df_apriori))
-
-  df_apriori['comentario2'] = df_apriori['comentario2'].apply(ast.literal_eval)
-  df_apriori['tipos_palabra'] = df_apriori['tipos_palabra'].apply(ast.literal_eval)
-
-  # generar explode de palabras 
-  df_apriori = df_apriori.loc[
-    (df_apriori['App'].isin(filtro_App)) & 
-    (df_apriori['SO'].isin(filtro_SO)) & 
-    (df_apriori['calificacion'].isin(filtro_calificacion)) 
-    ,[
-      'id',
-      'comentario2',
-      'tipos_palabra'  
-      ]].explode(
-      ['comentario2','tipos_palabra']
-      )
-      
-  df_apriori['valor']=1
-
-
-  # limpiar df antes de continuar
-  df_apriori['comentario2'] = df_apriori['comentario2'].astype(str)
-  df_apriori['exluir'] = df_apriori['comentario2'].apply(
-    lambda x: 1 if len(x)<3 or any(c in x for c in ['.','/','$','-',':','%','1','2','3','4','5','6','7','8','9','0']) 
-              else 0
-    )
-
-  # pivotear para formato de apriori
-  df_apriori2 = df_apriori[
-    (df_apriori['tipos_palabra'].isin([
-      'adjetivo',
-      'sustantivo',
-      'verbo',
-      'adverbio',
-      ])) & 
-    (df_apriori['exluir']==0) 
-    ].pivot_table(
-      index='id', 
-      columns='comentario2', 
-      values='valor', 
-      fill_value=0
-      )
-
-  # generar frecuencia
-  frecuencia_items = apriori(
-    df_apriori2, 
-    min_support=min_soporte, 
-    use_colnames=True
-    )
-
-  # generar reglas
-  reglas = association_rules(
-    frecuencia_items,
-    metric = 'confidence',
-    min_threshold=min_confianza
-  )
-
-  # generar df de reglas 
-  df_reglas = pd.DataFrame({
-    'antecedente': [list(x) for x in reglas['antecedents']],
-    'consecuente': [list(x) for x in reglas['consequents']],
-    'items_antecedente': [len(list(x)) for x in reglas['antecedents']],
-    'items_consecuente': [len(list(x)) for x in reglas['consequents']],
-    'soporte_antecedente': reglas['antecedent support'],
-    'soporte_consecuente': reglas['consequent support'],
-    'soporte': reglas['support'],
-    'confianza': reglas['confidence'],
-    'lift': reglas['lift'],
-    'leverage': reglas['leverage'],
-    'conviccion': reglas['conviction']
-    }).sort_values(by='soporte', ascending = False)
-  
-  return df_reglas
-
-
-
-#=======================================================================
-# [B.7] Grafico + Grafo de reglas de asociacion 
-#=======================================================================
-
-
-
-@st.cache_resource() # https://docs.streamlit.io/library/advanced-features/caching
-def graficas_apriori(
+def graficas_apriori2(
   df_reglas_apriori,
+  filtro_App,
   top_n_reglas_grafo = 50,
   top_n_reglas_scatter = 50,
   tipo_distribucion_grafo = 'kamada_kawai_layout', # kamada_kawai_layout, spring_layout, circular_layout
   factor_separacion_grafo = 3
   ):
   
-  df_reglas_apriori2 = df_reglas_apriori[
+  df_reglas_apriori2 = df_reglas_apriori.loc[
+    df_reglas_apriori['App']==filtro_App,
     ['antecedente','consecuente','soporte','confianza']
     ]
 
@@ -626,46 +534,6 @@ def graficas_apriori(
   
   return fig1,fig2
 
-
-
-
-#=======================================================================
-# [B.8] Entregable Global de reglas de asociacion
-#=======================================================================
-
-
-
-@st.cache_resource() # https://docs.streamlit.io/library/advanced-features/caching
-def entregables_apriori(
-  df_input,
-  filtro_App,
-  filtro_SO,
-  filtro_calificacion,
-  top_n_reglas_scatter = 80,
-  top_n_reglas_grafo = 40
-  ):  
-  
-  # generar df de apriori 
-  df_reglas_apriori = generar_df_apriori(
-    df_input = df_input,
-    filtro_App = filtro_App,
-    filtro_SO = filtro_SO,
-    filtro_calificacion = filtro_calificacion,
-    min_soporte = 0.005,
-    min_confianza = 0.05
-    )
-  
-  fig1,fig2 = graficas_apriori(
-    df_reglas_apriori = df_reglas_apriori,
-    top_n_reglas_grafo = top_n_reglas_grafo,
-    top_n_reglas_scatter= top_n_reglas_scatter,
-    tipo_distribucion_grafo='kamada_kawai_layout',
-    factor_separacion_grafo = 3
-    )
-
-  
-  # retornar entregables 
-  return fig1,fig2,df_reglas_apriori
 
 
 
@@ -976,43 +844,41 @@ with tab5:
 
 with tab6:  
 
-  tab6_col1a,tab6_col2a,tab6_col3a = st.columns([1,4,1])  
+  tab6_col1a,tab6_col2a = st.columns([1,1])  
     
-  tab6_SO = tab6_col1a.multiselect(
-    'Sistema Operativo:', 
-    sorted(list(set(df_scrapp5['SO']))),
-    default = sorted(list(set(df_scrapp5['SO']))),
-    key='tab6_SO'
-    )
-  
-  tab6_App = tab6_col2a.multiselect(
-    'Aplicacion:', 
-    sorted(list(set(df_scrapp5['App']))),
-    default = sorted(list(set(df_scrapp5['App']))),
-    key='tab6_App'
-    )
-  
-  tab6_calificacion = tab6_col3a.multiselect(
-    'Calificacion:', 
-    sorted(list(set(df_scrapp5['calificacion']))),
-    default = sorted(list(set(df_scrapp5['calificacion']))),
-    key='tab6_calificacion'
+  tab6_App = tab6_col1a.selectbox(
+    label='Aplicacion:', 
+    options =sorted(list(set(df_scrapp5['App']))),
+    index = 0,
+    key = 'tab6_App'    
     )
   
   
-  fig6, grafo6,df_reglas6 = entregables_apriori(
-    df_input = df_scrapp5,
-    filtro_App = tab6_App,
-    filtro_SO = tab6_SO,
-    filtro_calificacion = tab6_calificacion,
-    top_n_reglas_scatter = 85,
-    top_n_reglas_grafo = 25
+  tab6_n_reglas = tab6_col2a.slider(
+    'Cantidad reglas a visualizar:', 
+    min_value=10, 
+    max_value=90, 
+    value=25, 
+    step=2,
+    key='tab6_n_reglas'
+    )
+   
+  
+  fig6,grafo6 = graficas_apriori2(
+    df_reglas_apriori = df_scrapp5_REGLAS_APRIORI,
+    filtro_App=tab6_App,
+    top_n_reglas_grafo = tab6_n_reglas,
+    top_n_reglas_scatter= tab6_n_reglas,
+    tipo_distribucion_grafo='kamada_kawai_layout',
+    factor_separacion_grafo = 3
     )
 
   
   with st.expander('Tabla con detalle de reglas', expanded=False):
     st.data_editor(
-      df_reglas6, 
+      df_scrapp5_REGLAS_APRIORI[
+        df_scrapp5_REGLAS_APRIORI['App']==tab6_App
+        ], 
       use_container_width=True, 
       disabled=True,
       hide_index=True
@@ -1026,7 +892,7 @@ with tab6:
 
 
 
-# !streamlit run APP_Scrapp_Comentarios_Apps_V2.py
+# !streamlit run APP_Scrapp_Comentarios_Apps_V3.py
 
 # para obtener TODOS los requerimientos de librerias que se usan
 # !pip freeze > requirements.txt
@@ -1037,5 +903,8 @@ with tab6:
 
 # Video tutorial para deployar una app en streamlitcloud
 # https://www.youtube.com/watch?v=HKoOBiAaHGg&ab_channel=Streamlit
+
+
+
 
 
