@@ -982,12 +982,12 @@ with tab6:
     top_n_reglas_grafo = 50
     )
 
-  with tempfile.NamedTemporaryFile(delete=False, suffix='.html') as archivo_temporal:
-    grafo6.save_graph(archivo_temporal.name)
-    ruta_archivo_temporal = archivo_temporal.name
+  # with tempfile.NamedTemporaryFile(delete=False, suffix='.html') as archivo_temporal:
+    # grafo6.save_graph(archivo_temporal.name)
+    # ruta_archivo_temporal = archivo_temporal.name
   
-  with open(ruta_archivo_temporal, 'r', encoding='utf-8') as archivo:
-    grafo_html = archivo.read()
+  # with open(ruta_archivo_temporal, 'r', encoding='utf-8') as archivo:
+    # grafo_html = archivo.read()
   
   
   
