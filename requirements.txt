@@ -5,5 +5,5 @@ matplotlib==3.7.2
 mlxtend==0.19.0
 plotly==5.6.0
 wordcloud==1.8.1
-pyvis==0.3.2
+networkx==2.8.3
 Pillow==9.5.0
