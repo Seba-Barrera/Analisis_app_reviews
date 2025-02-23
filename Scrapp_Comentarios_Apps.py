@@ -1004,7 +1004,7 @@ with tab6:
     st.plotly_chart(fig6)
     
   with st.expander('Grafo de reglas de asociacion', expanded=True):
-    st.components.v1.html(grafo_html, height=500, scrolling=True)
+    # st.components.v1.html(grafo_html, height=500, scrolling=True)
 
 
 
