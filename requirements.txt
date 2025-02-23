@@ -2,7 +2,6 @@ numpy==1.23.1
 pandas==1.5.3
 streamlit==1.39.0
 matplotlib==3.7.2
-mlxtend==0.19.0
 plotly==5.6.0
 wordcloud==1.8.1
 networkx==2.8.3
