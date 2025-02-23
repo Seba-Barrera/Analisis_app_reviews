@@ -11,8 +11,6 @@
 # !pip list > requirements.txt
 
 import streamlit as st
-from streamlit.components.v1 import html
-import tempfile
 
 # librerias para data
 import pandas as pd
@@ -27,7 +25,9 @@ import plotly.express as px
 
 # librerias para otras visualizaciones 
 from wordcloud import WordCloud # https://www.edureka.co/community/64068/installing-wordcloud-using-unable-getting-following-error
-from pyvis.network import Network
+import networkx as nx
+import matplotlib.colors as mcolors
+import matplotlib.cm as cm
 
 # libreria para analitica textual
 from mlxtend.frequent_patterns import apriori, association_rules
@@ -461,40 +461,182 @@ def generar_df_apriori(
 
 
 
+#=======================================================================
+# [B.7] Grafico + Grafo de reglas de asociacion 
+#=======================================================================
 
 
-#=======================================================================
-# [B.7] Asignar lista de colores segun lista de valores 
-#=======================================================================
 
 @st.cache_resource() # https://docs.streamlit.io/library/advanced-features/caching
-def num2color(
-  lista_numeros,
-  lista_colores
+def graficas_apriori(
+  df_reglas_apriori,
+  top_n_reglas_grafo = 50,
+  top_n_reglas_scatter = 50,
+  tipo_distribucion_grafo = 'kamada_kawai_layout', # kamada_kawai_layout, spring_layout, circular_layout
+  factor_separacion_grafo = 3
   ):
   
-  ind_colores = np.interp(
-    lista_numeros,
-    [min(lista_numeros),max(lista_numeros)],
-    [0,len(lista_colores)]
-    )
-  
-  entregable = [
-    lista_colores[int(np.floor(x))-1] for x in ind_colores
+  df_reglas_apriori2 = df_reglas_apriori[
+    ['antecedente','consecuente','soporte','confianza']
     ]
+
+  # quitar reglas reciprocas quedandose con la de mayor confianza
+  df_reglas_apriori2['regla_comb'] = df_reglas_apriori2.apply(
+    lambda x: frozenset(set(x['antecedente']) | set(x['consecuente'])), 
+    axis=1
+    )
+
+  df_reglas_apriori3 = df_reglas_apriori2.loc[
+    df_reglas_apriori2.groupby('regla_comb')['confianza'].idxmax()
+    ].drop(columns=['regla_comb']).sort_values(
+      by='soporte',ascending = False
+      ).reset_index(drop=True)
+
+
+  df_reglas_apriori3['antecedente'] = df_reglas_apriori3['antecedente'].apply(
+    lambda x: '+'.join(x)
+  )
+  df_reglas_apriori3['consecuente'] = df_reglas_apriori3['consecuente'].apply(
+    lambda x: '+'.join(x)
+  )
+  df_reglas_apriori3['regla'] = df_reglas_apriori3.apply(
+    lambda x: x['antecedente']+' -> '+x['consecuente'],
+    axis=1
+  )
+        
+  df_reglas_apriori3['soporte'] = df_reglas_apriori3['soporte'].apply(lambda x: round(x,4))
+  df_reglas_apriori3['confianza'] = df_reglas_apriori3['confianza'].apply(lambda x: round(x,4))
+
   
-  return entregable
+  fig1 = px.scatter(
+    df_reglas_apriori3.head(top_n_reglas_scatter),
+    x='soporte',
+    y='confianza',
+    hover_name = 'regla',
+    color = 'soporte',
+    size = 'confianza'
+  )
+  
+  
+  df_reglas_apriori4 = df_reglas_apriori3.head(top_n_reglas_grafo)
+    
+  # Crear grafo dirigido
+  Grafo = nx.DiGraph()
+  
+  # Contar la frecuencia de cada nodo (antecedente o consecuente)
+  frecuencia_nodos = pd.Series(
+    df_reglas_apriori4['antecedente'].explode()
+    ).append(
+      df_reglas_apriori4['consecuente'].explode()
+      ).value_counts()
+  
+  # Añadir nodos al grafo
+  for nodo, frecuencia in frecuencia_nodos.items():
+    Grafo.add_node(nodo, frequency=frecuencia)
+
+  # Añadir aristas con atributos de soporte y confianza
+  for _, fila in df_reglas_apriori4.iterrows():
+    Grafo.add_edge(
+      fila['antecedente'], 
+      fila['consecuente'], 
+      support=fila['soporte'], 
+      confidence=fila['confianza']
+      )
+
+  # Layout del grafo
+  if tipo_distribucion_grafo=='kamada_kawai_layout': 
+    pos = nx.kamada_kawai_layout(Grafo)
+  elif tipo_distribucion_grafo=='spring_layout': 
+    pos = nx.spring_layout(Grafo, seed=42,k=1,iterations=100)
+  elif tipo_distribucion_grafo=='circular_layout': 
+    pos = nx.circular_layout(Grafo)
+  else:
+    pos = nx.kamada_kawai_layout(Grafo)
+    
+  # Aumenta para más separación
+  pos = {node: (x*factor_separacion_grafo,y*factor_separacion_grafo) for node, (x, y) in pos.items()}
+
+
+  # Normalización para el color de las aristas
+  valores_confianza = [Grafo.edges[borde]['confidence'] for borde in Grafo.edges]
+  norm = mcolors.Normalize(vmin=min(valores_confianza), vmax=max(valores_confianza))
+  cmap = cm.get_cmap('coolwarm')
+  
+  # Crear figura de Plotly
+  fig2 = go.Figure()
+
+  # Añadir nodos
+  for nodo in Grafo.nodes:
+    
+    x, y = pos[nodo]
+    tamano = Grafo.nodes[nodo]['frequency'] * 2
+    fig2.add_trace(go.Scatter(
+      x=[x], 
+      y=[y],
+      mode='markers+text',
+      marker=dict(size=tamano, color='#636EFA', line=dict(width=2, color='DarkSlateGrey')),
+      text=nodo,
+      textposition='top center',
+      hoverinfo='text',
+      hovertext=f"Elemento: {nodo}<br>Frecuencia: {Grafo.nodes[nodo]['frequency']}"
+    ))
+
+
+  # Añadir aristas con flechas
+  for borde in Grafo.edges:
+    
+    x0, y0 = pos[borde[0]]
+    x1, y1 = pos[borde[1]]
+    soporte = Grafo.edges[borde]['support']
+    confianza = Grafo.edges[borde]['confidence']
+    color = mcolors.to_hex(cmap(norm(confianza)))
+
+    # Línea principal (sin flecha)
+    fig2.add_trace(go.Scatter(
+      x=[x0, x1], 
+      y=[y0, y1],
+      mode='lines',
+      line=dict(width=soporte, color=color),
+      hoverinfo='text',
+      text=f"{borde[0]} → {borde[1]}<br>Soporte: {soporte:.2f}<br>Confianza: {confianza:.2f}"
+      ))
+
+    # Flecha al final de la arista
+    fig2.add_annotation(
+      x=x1, y=y1,
+      ax=x0, ay=y0,
+      xref='x', yref='y',
+      axref='x', ayref='y',
+      showarrow=True,
+      arrowhead=3,
+      arrowsize=1,
+      arrowwidth=max(0.1,soporte * 100),
+      arrowcolor=color
+      )
+
+  # Diseño final
+  fig2.update_layout(
+    title='Grafo de Reglas de Asociación',
+    showlegend=False,
+    xaxis=dict(showgrid=False, zeroline=False, visible=False),
+    yaxis=dict(showgrid=False, zeroline=False, visible=False),
+    margin=dict(l=10, r=10, t=40, b=10),
+    plot_bgcolor='white'
+  )
+  
+  return fig1,fig2
+
 
 
 
 #=======================================================================
-# [B.8] Grafico + Grafo de reglas de asociacion 
+# [B.8] Entregable Global de reglas de asociacion
 #=======================================================================
 
 
 
 @st.cache_resource() # https://docs.streamlit.io/library/advanced-features/caching
-def graficar_apriori(
+def entregables_apriori(
   df_input,
   filtro_App,
   filtro_SO,
@@ -512,131 +654,18 @@ def graficar_apriori(
     min_soporte = 0.005,
     min_confianza = 0.05
     )
-      
-  df_reglas_apriori2 = df_reglas_apriori[
-    ['antecedente','consecuente','soporte','confianza']
-    ]
-
-  # quitar reglas reciprocas quedandose con la de mayor confianza
-  df_reglas_apriori2['regla_comb'] = df_reglas_apriori2.apply(
-    lambda x: frozenset(set(x['antecedente']) | set(x['consecuente'])), 
-    axis=1
-    )
   
-  df_reglas_apriori3 = df_reglas_apriori2.loc[
-    df_reglas_apriori2.groupby('regla_comb')['confianza'].idxmax()
-    ].drop(columns=['regla_comb']).sort_values(
-      by='soporte',ascending = False
-      ).reset_index(drop=True)
-  
-
-  df_reglas_apriori3['antecedente'] = df_reglas_apriori3['antecedente'].apply(
-    lambda x: '+'.join(x)
-  )
-  df_reglas_apriori3['consecuente'] = df_reglas_apriori3['consecuente'].apply(
-    lambda x: '+'.join(x)
-  )
-  df_reglas_apriori3['regla'] = df_reglas_apriori3.apply(
-    lambda x: x['antecedente']+' -> '+x['consecuente'],
-    axis=1
-  )
-        
-  df_reglas_apriori3['soporte'] = df_reglas_apriori3['soporte'].apply(lambda x: round(x,4))
-  df_reglas_apriori3['confianza'] = df_reglas_apriori3['confianza'].apply(lambda x: round(x,4))
-  
-  
-  fig = px.scatter(
-    df_reglas_apriori3.head(top_n_reglas_scatter),
-    x='soporte',
-    y='confianza',
-    hover_name = 'regla',
-    color = 'soporte',
-    size = 'confianza'
-  )
-
-
-  # crear df de nodos
-  df_reglas_apriori4 = df_reglas_apriori3.head(top_n_reglas_grafo)
-    
-  df_nodo = pd.DataFrame(
-    Counter(pd.concat([
-      df_reglas_apriori4['antecedente'],df_reglas_apriori4['consecuente']
-    ])).items(),
-    columns = ['Item','Frecuencia']
-  )
-  
-  # crear id para nodo
-  df_nodo['id_nodo'] = range(1,1+len(df_nodo))
-  
-  # agregar color segun frecuencia
-  df_nodo['color'] = num2color(
-    lista_colores = px.colors.sequential.Viridis,
-    lista_numeros=df_nodo['Frecuencia']
-  )
-  
-  # incorporar id_nodo a df de reglas
-  df_conexiones = df_reglas_apriori4.merge(
-    df_nodo[['Item','id_nodo']],
-    left_on = 'antecedente',
-    right_on='Item'
-    ).rename(
-      columns = {'id_nodo':'id_nodo_a'}
-    ).drop('Item',axis=1).merge(
-      df_nodo[['Item','id_nodo']],
-      left_on = 'consecuente',
-      right_on='Item'
-    ).rename(
-      columns = {'id_nodo':'id_nodo_c'}
-    ).drop('Item',axis=1)
-  
-  # agregar color segun confianza
-  df_conexiones['color'] = num2color(
-    lista_colores = px.colors.sequential.Plotly3[::-1],
-    lista_numeros = df_conexiones['confianza']
-    )
-  
-  # crear un grafo 
-  grafo = Network(
-    notebook = True,
-    directed = True,
-    cdn_resources = 'remote'
+  fig1,fig2 = graficas_apriori(
+    df_reglas_apriori = df_reglas_apriori,
+    top_n_reglas_grafo = top_n_reglas_grafo,
+    top_n_reglas_scatter= top_n_reglas_scatter,
+    tipo_distribucion_grafo='kamada_kawai_layout',
+    factor_separacion_grafo = 3
     )
 
-  # agregar nodos
-  for i in range(len(df_nodo)):
-    grafo.add_node(
-      df_nodo.loc[i,'id_nodo'].item(),
-      label = df_nodo.loc[i,'Item'],
-      value = df_nodo.loc[i,'Frecuencia'].item(),
-      color = df_nodo.loc[i,'color']
-      )
-
-
-  # agregar conexiones 
-  for i in range(len(df_conexiones)):
-    grafo.add_edge(
-      df_conexiones.loc[i,'id_nodo_a'].item(),
-      df_conexiones.loc[i,'id_nodo_c'].item(),
-      value = df_conexiones.loc[i,'confianza'].item(),
-      title = 'soporte: '+str(round(df_conexiones.loc[i,'soporte'].item(),2)),
-      color = df_conexiones.loc[i,'color']
-      )
-
-  # configurar mejor diseño de grafo
-  grafo.repulsion(
-    node_distance = 200,
-    central_gravity = 0.3,
-    spring_length = 200,
-    spring_strength = 0.02,
-    damping = 0.05
-    )
-
-  # guardar grafo
-  # grafo.save_graph(nombre_grafo)
   
   # retornar entregables 
-  return fig,grafo,df_reglas_apriori
-
+  return fig1,fig2,df_reglas_apriori
 
 
 
@@ -654,9 +683,7 @@ st.set_page_config(layout='wide')
 st.markdown('# 📲 Analisis de reviews Apps')
 
 # autoria 
-st.markdown('**Autor :point_right: [Sebastian Barrera](https://www.linkedin.com/in/sebasti%C3%A1n-nicolas-barrera-varas-70699a28)**')
-
-
+st.markdown('**Autor 👉 [Sebastian Barrera](https://www.linkedin.com/in/sebasti%C3%A1n-nicolas-barrera-varas-70699a28)**')
 
 
 
@@ -971,26 +998,17 @@ with tab6:
     default = sorted(list(set(df_scrapp5['calificacion']))),
     key='tab6_calificacion'
     )
-
-
-  fig6, grafo6,df_reglas6 = graficar_apriori(
+  
+  
+  fig6, grafo6,df_reglas6 = entregables_apriori(
     df_input = df_scrapp5,
     filtro_App = tab6_App,
     filtro_SO = tab6_SO,
     filtro_calificacion = tab6_calificacion,
-    top_n_reglas_scatter = 90,
-    top_n_reglas_grafo = 50
+    top_n_reglas_scatter = 85,
+    top_n_reglas_grafo = 25
     )
 
-  # with tempfile.NamedTemporaryFile(delete=False, suffix='.html') as archivo_temporal:
-    # grafo6.save_graph(archivo_temporal.name)
-    # ruta_archivo_temporal = archivo_temporal.name
-  
-  # with open(ruta_archivo_temporal, 'r', encoding='utf-8') as archivo:
-    # grafo_html = archivo.read()
-  
-  
-  
   
   with st.expander('Tabla con detalle de reglas', expanded=False):
     st.data_editor(
@@ -1003,12 +1021,12 @@ with tab6:
   with st.expander('Grafico de dispersion de reglas', expanded=False):
     st.plotly_chart(fig6)
     
-  # with st.expander('Grafo de reglas de asociacion', expanded=True):
-    # st.components.v1.html(grafo_html, height=500, scrolling=True)
+  with st.expander('Grafo de reglas de asociacion', expanded=True):
+    st.plotly_chart(grafo6)
 
 
 
-# !streamlit run Scrapp_Comentarios_Apps_V3.py
+# !streamlit run APP_Scrapp_Comentarios_Apps_V2.py
 
 # para obtener TODOS los requerimientos de librerias que se usan
 # !pip freeze > requirements.txt
@@ -1019,7 +1037,5 @@ with tab6:
 
 # Video tutorial para deployar una app en streamlitcloud
 # https://www.youtube.com/watch?v=HKoOBiAaHGg&ab_channel=Streamlit
-
-
 
 
