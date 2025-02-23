@@ -18,7 +18,6 @@ import tempfile
 import pandas as pd
 import numpy as np
 from collections import Counter
-from IPython.display import display
 import ast 
 
 # librerias para graficos
@@ -30,39 +29,12 @@ import plotly.express as px
 from wordcloud import WordCloud # https://www.edureka.co/community/64068/installing-wordcloud-using-unable-getting-following-error
 from pyvis.network import Network
 
-# librerias para segmentacion 
-from sklearn.cluster import KMeans
-from sklearn.mixture import GaussianMixture
-from sklearn.metrics import silhouette_score
-from scipy.spatial.distance import cdist
-
-# librerias de IA
-from openai import OpenAI
-from pydantic import BaseModel
-
-# librerias para web scraping
-from google_play_scraper import reviews,Sort
-from app_store_scraper import AppStore
-
-# librerias para reduccion de dimensionalidad
-from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
-
 # libreria para analitica textual
-import spacy
-from spacy import displacy
 from mlxtend.frequent_patterns import apriori, association_rules
-
-# para graficos interactivos
-from ipywidgets import interact
-import ipywidgets as widgets
 
 
 import warnings
 warnings.filterwarnings('ignore')
-
-
-
 
 
 #&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
